@@ -1,0 +1,18 @@
+http:
+  routers:
+    dashboard:
+      rule: "PathPrefix(`/dashboard`)"
+      service: api@internal
+
+    app:
+      rule: "Host(`localhost`)"
+      service: blue-green-weighted
+
+  services:
+    blue-green-weighted:
+      weighted:
+        services:
+          - name: blue@docker
+            weight: 90
+          - name: green@docker
+            weight: 10
