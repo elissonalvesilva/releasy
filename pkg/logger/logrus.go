@@ -35,3 +35,8 @@ func WithField(key string, value interface{}) *logrus.Entry {
 func WithFields(fields logrus.Fields) *logrus.Entry {
 	return base.WithFields(fields)
 }
+
+func WithError(err error) *logrus.Entry {
+	return base.WithError(err)
+}
+
