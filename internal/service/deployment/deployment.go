@@ -1,9 +1,8 @@
 package deployment
 
 import (
-	"encoding/json"
+	"github.com/elissonalvesilva/releasy/internal/core/domain"
 	"github.com/elissonalvesilva/releasy/internal/store"
-	"github.com/google/uuid"
 	"time"
 )
 
@@ -36,23 +35,32 @@ func NewDeploymentService(streams store.Streams) *DeploymentService {
 }
 
 func (d *DeploymentService) Execute(command DeploymentCommand) (string, error) {
-	jobID := uuid.NewString()
+	deployment, err := domain.NewDeployment(
+		command.DeploymentName,
+		command.ServiceName,
+		command.Image,
+		command.Version,
+		command.Replicas,
+		command.SwapInterval,
+		command.HealthCheckInterval,
+		command.MaxWaitTime,
+		command.Envs,
+	)
 
-	envs, err := d.buildEnvsPayload(command.Envs)
 	if err != nil {
 		return "", err
 	}
 
 	payload := map[string]interface{}{
-		"job_id":                jobID,
-		"service_name":          command.ServiceName,
-		"version":               command.Version,
-		"image":                 command.Image,
-		"replicas":              command.Replicas,
-		"swap_interval":         command.SwapInterval,
-		"health_check_interval": command.HealthCheckInterval,
-		"max_wait_time":         command.MaxWaitTime,
-		"env":                   envs,
+		"job_id":                deployment,
+		"service_name":          deployment.ServiceName,
+		"version":               deployment.Version,
+		"image":                 deployment.Image,
+		"replicas":              deployment.Replicas,
+		"swap_interval":         deployment.SwapInterval,
+		"health_check_interval": deployment.HealthCheckInterval,
+		"max_wait_time":         deployment.MaxWaitTime,
+		"env":                   deployment.Envs,
 		"created_at":            time.Now().Format(time.RFC3339),
 	}
 
@@ -60,15 +68,5 @@ func (d *DeploymentService) Execute(command DeploymentCommand) (string, error) {
 		return "", err
 	}
 
-	return jobID, nil
-}
-
-func (d *DeploymentService) buildEnvsPayload(envs []string) (string, error) {
-	envsJSON, err := json.Marshal(envs)
-
-	if err != nil {
-		return "", err
-	}
-
-	return string(envsJSON), nil
+	return deployment.JobID, nil
 }
