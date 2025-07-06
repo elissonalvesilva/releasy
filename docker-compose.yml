@@ -7,8 +7,7 @@ services:
     command:
       - --configFile=/etc/traefik/traefik.yml
     ports:
-      - "80:80"      # Entrada HTTP
-      - "8080:8080"  # Dashboard
+      - "80:80"
     volumes:
       - ./traefik/traefik.yml:/etc/traefik/traefik.yml:ro
       - ./traefik/dynamic.yml:/etc/traefik/dynamic/dynamic.yml:ro
@@ -16,30 +15,8 @@ services:
     networks:
       - releasy_network
 
-  nginx:
-    image: nginx:alpine
-    container_name: nginx-proxy
-    volumes:
-      - ./nginx/nginx.conf:/etc/nginx/conf.d/default.conf:ro
-    ports:
-      - "8081:80"
-    depends_on:
-      - traefik
-    networks:
-      - releasy_network
-
-  example-api-v1:
-    image: example-api:v1
-    expose:
-      - "8080"
-    labels:
-      - "traefik.enable=true"
-      - "traefik.http.services.example-api-v1.loadbalancer.server.port=8080"
-    networks:
-      - releasy_network
-
-  releasy:
-    image: releasy-api:v21
+  control_plane:
+    image: control_plane:v1
     expose:
       - "3344"
     volumes:

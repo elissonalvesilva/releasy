@@ -132,52 +132,6 @@ func (b *blueGreenService) buildEnv(customEnv []string) ([]string, int) {
 	return finalEnv, appPort
 }
 
-// func (b *blueGreenService) Execute(command BlueGreenCommand) error {
-
-// 	service := b.service(command)
-// 	err := b.client.CreateService(service.ServiceName, service.Image, service.Replicas, service.Env, service.AppPort)
-// 	if err != nil {
-// 		return err
-// 	}
-
-// 	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(service.MaxWaitTime)*time.Second)
-// 	defer cancel()
-
-// 	err = b.healthCheckClient.Ping(ctx, service.ServiceName, service.AppPort, service.HealthCheckInterval)
-// 	if err != nil {
-// 		logger.WithField("service", service.ServiceName).WithError(err).Error("Error pinging service")
-// 		return err
-// 	}
-
-// 	services, err := b.client.ListByServiceName(command.ServiceName)
-// 	if err != nil {
-// 		return err
-// 	}
-
-// 	for _, serviceName := range services {
-// 		if serviceName == service.ServiceName {
-// 			continue
-// 		}
-
-// 		image, err := b.client.GetServiceImage(serviceName)
-// 		if err != nil {
-// 			logger.WithField("service", serviceName).WithError(err).Warn("Could not get image from old service")
-// 			continue
-// 		}
-
-// 		logger.WithFields(map[string]interface{}{
-// 			"service": serviceName,
-// 			"image":   image,
-// 		}).Info("Removing old version")
-
-// 		if err := b.client.RemoveService(serviceName, image); err != nil {
-// 			logger.WithField("service", serviceName).WithError(err).Warn("Failed to remove old service")
-// 		}
-// 	}
-
-// 	return nil
-// }
-
 func (b *blueGreenService) Execute(command BlueGreenCommand) error {
 	logger.WithField("service", command.ServiceName).Info("🚀 Starting Blue/Green deployment")
 

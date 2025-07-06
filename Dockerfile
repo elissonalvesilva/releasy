@@ -16,7 +16,7 @@ RUN go mod download
 COPY . .
 
 # Compila o binário
-RUN go build -o releasy-api ./cmd/api
+RUN go build -o controlplane ./cmd/controlplane
 
 # ------------------------------------------
 # 🚀 Stage 2 — Image final minimalista
@@ -26,11 +26,11 @@ FROM alpine:latest
 WORKDIR /app
 
 # Copia binário do builder
-COPY --from=builder /app/releasy-api .
+COPY --from=builder /app/controlplane .
 
 # Expõe porta (opcional, se tiver porta http)
 EXPOSE 3344
 
 
 # Comando de inicialização
-ENTRYPOINT ["./releasy-api"]
+ENTRYPOINT ["./controlplane"]
