@@ -24,6 +24,10 @@ func Error(args ...interface{}) {
 	base.Error(args...)
 }
 
+func Fatal(args ...interface{}) {
+	base.Fatal(args...)
+}
+
 func Warn(args ...interface{}) {
 	base.Warn(args...)
 }
@@ -39,4 +43,3 @@ func WithFields(fields logrus.Fields) *logrus.Entry {
 func WithError(err error) *logrus.Entry {
 	return base.WithError(err)
 }
-

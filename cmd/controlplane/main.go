@@ -1,28 +1,30 @@
 package main
 
 import (
-	"github.com/elissonalvesilva/releasy/internal/controllers"
-	"github.com/elissonalvesilva/releasy/internal/docker"
-	"github.com/elissonalvesilva/releasy/internal/healthcheck"
-	"github.com/elissonalvesilva/releasy/internal/service/bluegreen"
-	"github.com/elissonalvesilva/releasy/pkg/httpclient"
-	"github.com/gin-gonic/gin"
+	"github.com/elissonalvesilva/releasy/internal/api"
+	"github.com/elissonalvesilva/releasy/internal/service/deployment"
+	"github.com/elissonalvesilva/releasy/internal/store"
+	"github.com/elissonalvesilva/releasy/pkg/logger"
+	"os"
 )
 
 func main() {
-	swarmClient, err := docker.NewDockerClient()
-	if err != nil {
-		panic(err)
+	redisAddr := os.Getenv("RELEASY_REDIS_ADDR")
+	if redisAddr == "" {
+		redisAddr = "localhost:6379"
 	}
-	httpClient := httpclient.New()
-	healthChecker := healthcheck.NewHTTPHealthChecker(httpClient)
 
-	blueGreen := bluegreen.NewBlueGreenService(swarmClient, healthChecker)
+	port := os.Getenv("RELEASY_PORT")
+	if port == "" {
+		port = ":3344"
+	}
 
-	controller := controllers.NewDeployController(blueGreen)
+	streamsStore := store.NewStreamsStore(redisAddr)
 
-	r := gin.Default()
-	r.POST("/deploy", controller.Deploy)
+	deploymentService := deployment.NewDeploymentService(streamsStore)
+	server := api.NewAPI(streamsStore, deploymentService)
 
-	r.Run(":3344")
+	if err := server.Run(port); err != nil {
+		logger.WithError(err).Fatal("API server crashed")
+	}
 }
