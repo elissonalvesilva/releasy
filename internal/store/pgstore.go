@@ -3,8 +3,9 @@ package store
 import (
 	"context"
 	"embed"
-	"github.com/elissonalvesilva/releasy/internal/core/dto"
 	"time"
+
+	"github.com/elissonalvesilva/releasy/internal/core/dto"
 
 	"github.com/jmoiron/sqlx"
 	_ "github.com/lib/pq"
@@ -24,10 +25,12 @@ type DbStore interface {
 	UpdateDeploymentStep(ctx context.Context, id string, step string) error
 	GetDeploymentByID(ctx context.Context, id string) (*Deployment, error)
 
-	SaveSlot(ctx context.Context, s Slot) error
-	GetSlots(ctx context.Context, serviceName string) ([]Slot, error)
-	GetSlot(ctx context.Context, serviceName, version string) (*Slot, error)
-	DeleteSlot(ctx context.Context, serviceName, version string) error
+	SaveService(ctx context.Context, s Service) error
+	GetServices(ctx context.Context, serviceName string) ([]Service, error)
+	GetService(ctx context.Context, serviceName, version string) (*Service, error)
+	DeleteService(ctx context.Context, serviceName, version string) error
+	GetServiceByName(ctx context.Context, serviceName string) (*Service, error)
+	UpdateService(ctx context.Context, s Service) error
 
 	SaveEvent(ctx context.Context, e Event) error
 	GetEvents(ctx context.Context, serviceName string, limit int) ([]Event, error)
@@ -47,12 +50,16 @@ type Deployment struct {
 	UpdatedAt   time.Time `db:"updated_at"`
 }
 
-type Slot struct {
-	ID          string    `db:"id"`
-	ServiceName string    `db:"service_name"`
-	Version     string    `db:"version"`
-	Weight      int       `db:"weight"`
-	CreatedAt   time.Time `db:"created_at"`
+type Service struct {
+	ID        string    `db:"id"`
+	Name      string    `db:"name"`
+	Version   string    `db:"version"`
+	Image     string    `db:"image"`
+	Replicas  int       `db:"replicas"`
+	Envs      string    `db:"envs"`
+	Weight    int       `db:"weight"`
+	Hostname  string    `db:"hostname"`
+	CreatedAt time.Time `db:"created_at"`
 }
 
 type Event struct {
@@ -138,40 +145,58 @@ func (s *PgStore) GetDeploymentByID(ctx context.Context, id string) (*Deployment
 	return &d, nil
 }
 
-func (s *PgStore) SaveSlot(ctx context.Context, slot Slot) error {
+func (s *PgStore) SaveService(ctx context.Context, svc Service) error {
 	query := `
-		INSERT INTO slots (id, service_name, version, weight, created_at)
-		VALUES ($1, $2, $3, $4, $5)
-		ON CONFLICT (service_name, version) DO UPDATE
-		SET weight = EXCLUDED.weight, created_at = EXCLUDED.created_at
+		INSERT INTO services (id, name, version, image, replicas, envs, weight, hostname, created_at)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+		ON CONFLICT (name, version) DO UPDATE
+		SET image = EXCLUDED.image, replicas = EXCLUDED.replicas, envs = EXCLUDED.envs, weight = EXCLUDED.weight, hostname = EXCLUDED.hostname, created_at = EXCLUDED.created_at
 	`
 	_, err := s.DB.ExecContext(ctx, query,
-		slot.ID, slot.ServiceName, slot.Version, slot.Weight, slot.CreatedAt)
+		svc.ID, svc.Name, svc.Version, svc.Image, svc.Replicas, svc.Envs, svc.Weight, svc.Hostname, svc.CreatedAt)
 	return err
 }
 
-func (s *PgStore) GetSlots(ctx context.Context, serviceName string) ([]Slot, error) {
-	var slots []Slot
-	query := `SELECT * FROM slots WHERE service_name = $1 ORDER BY created_at DESC`
-	err := s.DB.SelectContext(ctx, &slots, query, serviceName)
-	return slots, err
+func (s *PgStore) GetServices(ctx context.Context, serviceName string) ([]Service, error) {
+	var services []Service
+	query := `SELECT * FROM services WHERE name = $1 ORDER BY created_at DESC`
+	err := s.DB.SelectContext(ctx, &services, query, serviceName)
+	return services, err
 }
 
-func (s *PgStore) GetSlot(ctx context.Context, serviceName, version string) (*Slot, error) {
-	var slot Slot
-	query := `SELECT * FROM slots WHERE service_name = $1 AND version = $2`
-	err := s.DB.GetContext(ctx, &slot, query, serviceName, version)
+func (s *PgStore) GetService(ctx context.Context, serviceName, version string) (*Service, error) {
+	var svc Service
+	query := `SELECT * FROM services WHERE name = $1 AND version = $2`
+	err := s.DB.GetContext(ctx, &svc, query, serviceName, version)
 	if err != nil {
 		return nil, err
 	}
-	return &slot, nil
+	return &svc, nil
 }
 
-func (s *PgStore) DeleteSlot(ctx context.Context, serviceName, version string) error {
-	query := `DELETE FROM slots WHERE service_name = $1 AND version = $2`
+func (s *PgStore) GetServiceByName(ctx context.Context, serviceName string) (*Service, error) {
+	var svc Service
+	query := `SELECT * FROM services WHERE name = $1 ORDER BY created_at DESC LIMIT 1`
+	err := s.DB.GetContext(ctx, &svc, query, serviceName)
+	if err != nil {
+		return nil, err
+	}
+	return &svc, nil
+}
+
+func (s *PgStore) DeleteService(ctx context.Context, serviceName, version string) error {
+	query := `DELETE FROM services WHERE name = $1 AND version = $2`
 	_, err := s.DB.ExecContext(ctx, query, serviceName, version)
 	return err
 }
+
+func (s *PgStore) UpdateService(ctx context.Context, svc Service) error {
+	query := `UPDATE services SET image = $1, replicas = $2, envs = $3, weight = $4, hostname = $5, created_at = $6 WHERE name = $7 AND version = $8`
+	_, err := s.DB.ExecContext(ctx, query, svc.Image, svc.Replicas, svc.Envs, svc.Weight, svc.Hostname, svc.CreatedAt, svc.Name, svc.Version)
+	return err
+}
+
+/// events
 
 func (s *PgStore) SaveEvent(ctx context.Context, e Event) error {
 	query := `INSERT INTO events (id, service_name, message, created_at) VALUES ($1, $2, $3, $4)`

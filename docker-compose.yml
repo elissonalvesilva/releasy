@@ -37,7 +37,7 @@ services:
         condition: service_healthy
 
   agent:
-    image: agent:v30
+    image: agent:v31
     depends_on:
       redis:
         condition: service_started
@@ -60,6 +60,7 @@ services:
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - ./internal/config/traefik/dynamic.yml:/etc/traefik/dynamic/dynamic.yml
+      - ~/.docker/config.json:/root/.docker/config.json:ro
 
   redis:
     image: redis:7-alpine

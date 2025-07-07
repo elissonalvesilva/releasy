@@ -9,7 +9,6 @@ providers:
     watch: true
 
 api:
-  dashboard: true
   insecure: true
 
 log:
