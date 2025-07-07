@@ -52,7 +52,9 @@ services:
   redis:
     image: redis:7-alpine
     container_name: releasy-redis
-    command: [ "redis-server", "--save", "", "--appendonly", "no" ]
+    entrypoint: ["/entrypoint.sh"]
+    volumes:
+      - ./internal/config/redis/redis-entrypoint.sh:/entrypoint.sh
     networks:
       - releasy_network
     labels:
