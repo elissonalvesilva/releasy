@@ -68,7 +68,7 @@ func (c *dockerClient) CreateService(serviceName, slot string, image string, rep
 				return pullErr
 			}
 			defer rc.Close()
-			io.Copy(io.Discard, rc) // Descomente se quiser garantir que consome tudo
+			io.Copy(io.Discard, rc)
 		} else {
 			logger.WithError(err).Error("Failed to inspect image")
 			return err

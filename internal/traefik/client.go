@@ -175,15 +175,14 @@ func (c *Client) GetCurrentSlot(serviceName string) (string, error) {
 		return "", fmt.Errorf("no split config for %s", serviceName)
 	}
 
-	var max WeightedService
+	var maxWeight WeightedService
 	for _, s := range split.Weighted.Services {
-		if s.Weight > max.Weight {
-			max = s
+		if s.Weight > maxWeight.Weight {
+			maxWeight = s
 		}
 	}
 
-	// NEW: remove provider suffix if present
-	name := strings.Split(max.Name, "@")[0]
+	name := strings.Split(maxWeight.Name, "@")[0]
 
 	if strings.HasSuffix(name, "-v1") {
 		return "v1", nil

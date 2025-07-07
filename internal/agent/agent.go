@@ -110,7 +110,6 @@ func parseMessage(msg redis.XMessage, deploy *Deployment) error {
 func (a *Agent) blueGreen(ctx context.Context, deploy Deployment) error {
 	const port = 8080
 
-	// 1️⃣ Cria o slot novo
 	if err := a.DockerClient.CreateService(
 		deploy.ServiceName,
 		deploy.Version,
@@ -122,7 +121,6 @@ func (a *Agent) blueGreen(ctx context.Context, deploy Deployment) error {
 		return fmt.Errorf("create slot: %w", err)
 	}
 
-	// 2️⃣ Garante router apontando pro SPLIT
 	if err := a.TraefikClient.EnsureRouter(
 		deploy.ServiceName,
 		fmt.Sprintf("Host(`%s.local`)", deploy.ServiceName),
@@ -130,7 +128,6 @@ func (a *Agent) blueGreen(ctx context.Context, deploy Deployment) error {
 		return fmt.Errorf("ensure router: %w", err)
 	}
 
-	// 3️⃣ Checa saúde do novo slot
 	ctxPing, cancel := context.WithTimeout(ctx, time.Duration(deploy.MaxWaitTime)*time.Second)
 	defer cancel()
 
@@ -141,14 +138,12 @@ func (a *Agent) blueGreen(ctx context.Context, deploy Deployment) error {
 		return fmt.Errorf("healthcheck failed: %w", err)
 	}
 
-	// 4️⃣ Descobre slot atual
 	oldSlot, err := a.TraefikClient.GetCurrentSlot(deploy.ServiceName)
 	if err != nil {
 		return fmt.Errorf("get current slot: %w", err)
 	}
 	logger.Info(fmt.Sprintf("[Agent] Current slot is %s", oldSlot))
 
-	// 5️⃣ Começa rollout SPLIT
 	if err := a.TraefikClient.InsertWeightedService(deploy.ServiceName, []traefik.WeightedBackend{
 		{Name: deploy.ServiceName + "-" + oldSlot, Weight: 80},
 		{Name: slotName, Weight: 20},
@@ -156,9 +151,9 @@ func (a *Agent) blueGreen(ctx context.Context, deploy Deployment) error {
 		return fmt.Errorf("insert weighted: %w", err)
 	}
 
-	// 6️⃣ Swap loop
 	oldWeight := 80
 	newWeight := 20
+	logger.Info(fmt.Sprintf("[Agent] Swap step: %d%% old, %d%% new", oldWeight, newWeight))
 	for oldWeight > 0 {
 		time.Sleep(time.Duration(deploy.SwapInterval) * time.Second)
 		oldWeight -= 20
@@ -177,19 +172,16 @@ func (a *Agent) blueGreen(ctx context.Context, deploy Deployment) error {
 		logger.Info(fmt.Sprintf("[Agent] Swap step: %d%% old, %d%% new", oldWeight, newWeight))
 	}
 
-	// 7️⃣ Limpa split final antes de remover container antigo
 	if err := a.TraefikClient.InsertWeightedService(deploy.ServiceName, []traefik.WeightedBackend{
 		{Name: slotName, Weight: 100},
 	}); err != nil {
 		return fmt.Errorf("cleanup weighted: %w", err)
 	}
 
-	// Agora é seguro matar o container antigo
 	if err := a.DockerClient.RemoveSlot(deploy.ServiceName, oldSlot); err != nil {
 		logger.Warn(fmt.Sprintf("[Agent] Failed to remove old slot: %v", err))
 	}
 
-	// 8️⃣ Finaliza: router agora aponta DIRETO
 	if err := a.TraefikClient.PointRouterTo(deploy.ServiceName, deploy.Version); err != nil {
 		return fmt.Errorf("point router failed: %w", err)
 	}
