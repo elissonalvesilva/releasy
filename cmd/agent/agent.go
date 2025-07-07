@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"log"
 	"os"
 
@@ -13,24 +14,30 @@ import (
 )
 
 func main() {
-	redisAddr := os.Getenv("RELEASY_REDIS_ADDR")
-	if redisAddr == "" {
-		redisAddr = "localhost:6379"
-	}
+	redisAddr := getenv("RELEASY_REDIS_ADDR", "localhost:6379")
+	postgresDSN := getenv("RELEASY_POSTGRES_DSN", "postgres://postgres:postgres@localhost:5454/releasy?sslmode=disable")
+	networkName := getenv("RELEASY_NETWORK", "releasy_network")
+	dynamicFilePath := getenv("TRAEFIK_DYNAMIC_FILE", "./dynamic.yml")
 
 	hostname, err := os.Hostname()
 	if err != nil {
 		log.Fatalf("Could not get hostname: %v", err)
 	}
 
-	networkName := getenv("RELEASY_NETWORK", "releasy_network")
-	dynamicFilePath := getenv("TRAEFIK_DYNAMIC_FILE", "./dynamic.yml")
-
 	streams := store.NewStreamsStore(redisAddr)
 	if err := streams.Ping(); err != nil {
 		log.Fatalf("Redis ping failed: %v", err)
 	}
 	log.Println("Connected to Redis:", redisAddr)
+
+	pg, err := store.NewPgStore(postgresDSN)
+	if err != nil {
+		log.Fatalf("Postgres connect failed: %v", err)
+	}
+	if err := pg.InitSchema(context.Background()); err != nil {
+		log.Fatalf("InitSchema failed: %v", err)
+	}
+	log.Println("✅ Postgres schema ensured:", postgresDSN)
 
 	dockerClient, err := docker.NewDockerClient(networkName)
 	if err != nil {
@@ -52,6 +59,7 @@ func main() {
 		healthChecker,
 		traefikClient,
 		streams,
+		pg,
 	)
 
 	log.Println("Agent ready. Starting worker...")

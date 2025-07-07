@@ -4,11 +4,12 @@ import (
 	"encoding/json"
 	"errors"
 	"github.com/google/uuid"
+	"time"
 )
 
 type (
 	Deployment struct {
-		JobID               string
+		ID                  string
 		DeploymentStrategy  string
 		ServiceName         string
 		Replicas            int
@@ -19,6 +20,8 @@ type (
 		MaxWaitTime         int
 		Version             string
 		Action              string
+		Step                string
+		CreatedAt           time.Time
 	}
 )
 
@@ -53,6 +56,23 @@ var allowedActions = map[string]bool{
 	ActionDeployRollback: true,
 }
 
+const (
+	StepCreating      = "creating"
+	StepCreatingInfra = "creating_infra"
+	StepSwapTraffic   = "swap_traffic"
+	StepFinishing     = "finishing"
+	StepRollback      = "rollback"
+	StepRunning       = "running"
+	StepEffective     = "effective"
+	StepFinished      = "finished"
+	StepFailed        = "failed"
+	StepRollBacking   = "rollbacking"
+)
+
+const (
+	DefaultServicePort = 8080
+)
+
 func NewDeployment(deploymentStrategy, action, serviceName, image, version string, replicas, swapInterval, healthCheckInterval, maxWaitTime int, envs []string) (*Deployment, error) {
 	if deploymentStrategy == "" || !isValidStrategy(deploymentStrategy) {
 		return nil, ErrDeploymentNameIsInvalid
@@ -70,7 +90,7 @@ func NewDeployment(deploymentStrategy, action, serviceName, image, version strin
 	}
 
 	return &Deployment{
-		JobID:               jobID,
+		ID:                  jobID,
 		DeploymentStrategy:  deploymentStrategy,
 		ServiceName:         serviceName,
 		Replicas:            replicas,
@@ -80,6 +100,9 @@ func NewDeployment(deploymentStrategy, action, serviceName, image, version strin
 		Envs:                buildedEnvs,
 		MaxWaitTime:         maxWaitTime,
 		Version:             version,
+		Action:              action,
+		Step:                StepCreating,
+		CreatedAt:           time.Now(),
 	}, nil
 }
 

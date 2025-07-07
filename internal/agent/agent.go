@@ -4,16 +4,16 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log"
+	"github.com/elissonalvesilva/releasy/internal/core/domain"
 	"time"
 
-	"github.com/elissonalvesilva/releasy/pkg/logger"
-
-	"github.com/elissonalvesilva/releasy/internal/core/domain"
+	"github.com/elissonalvesilva/releasy/internal/core/dto"
 	"github.com/elissonalvesilva/releasy/internal/docker"
 	"github.com/elissonalvesilva/releasy/internal/healthcheck"
+	"github.com/elissonalvesilva/releasy/internal/jobs/bluegreen"
 	"github.com/elissonalvesilva/releasy/internal/store"
 	"github.com/elissonalvesilva/releasy/internal/traefik"
+	"github.com/elissonalvesilva/releasy/pkg/logger"
 	"github.com/go-redis/redis/v8"
 )
 
@@ -25,22 +25,19 @@ type Agent struct {
 	HealthChecker healthcheck.HealthChecker
 	TraefikClient traefik.TraefikInterface
 	Stream        store.Streams
+	db            store.DbStore
+
+	blueGreenJob *bluegreen.Handler
 }
 
-type Deployment struct {
-	JobID               string `json:"job_id"`
-	DeploymentStrategy  string `json:"strategy"`
-	ServiceName         string `json:"service_name"`
-	Version             string `json:"version"`
-	Image               string `json:"image"`
-	Replicas            int    `json:"replicas"`
-	SwapInterval        int    `json:"swap_interval"`
-	HealthCheckInterval int    `json:"health_check_interval"`
-	MaxWaitTime         int    `json:"max_wait_time"`
-	Envs                string `json:"env"`
-}
-
-func NewAgent(agentName, streamName, groupName string, dockerClient docker.DockerClient, healthChecker healthcheck.HealthChecker, traefikClient traefik.TraefikInterface, stream store.Streams) *Agent {
+func NewAgent(
+	agentName, streamName, groupName string,
+	dockerClient docker.DockerClient,
+	healthChecker healthcheck.HealthChecker,
+	traefikClient traefik.TraefikInterface,
+	stream store.Streams,
+	db store.DbStore,
+) *Agent {
 	return &Agent{
 		AgentName:     agentName,
 		StreamName:    streamName,
@@ -49,6 +46,9 @@ func NewAgent(agentName, streamName, groupName string, dockerClient docker.Docke
 		HealthChecker: healthChecker,
 		TraefikClient: traefikClient,
 		Stream:        stream,
+		db:            db,
+
+		blueGreenJob: bluegreen.New(dockerClient, traefikClient, healthChecker, db),
 	}
 }
 
@@ -69,129 +69,46 @@ func (a *Agent) Start() {
 		}
 
 		for _, msg := range messages {
-			var deploy Deployment
-			if err := parseMessage(msg, &deploy); err != nil {
+			deploy, err := parseMessage(msg)
+			if err != nil {
 				logger.Error(fmt.Sprintf("[Agent] Failed to parse job: %v", err))
 				continue
 			}
 
-			logger.Info(fmt.Sprintf("[Agent] JobID=%s Strategy=%s Service=%s", deploy.JobID, deploy.DeploymentStrategy, deploy.ServiceName))
+			logger.Info(fmt.Sprintf("[Agent] JobID=%s Strategy=%s Service=%s Action=%s", deploy.ID, deploy.DeploymentStrategy, deploy.ServiceName, deploy.Action))
 
 			var procErr error
 			switch deploy.DeploymentStrategy {
 			case domain.StrategyBlueGreen:
-				procErr = a.blueGreen(ctx, deploy)
+				procErr = a.blueGreenJob.Run(ctx, deploy)
 			default:
-				log.Printf("[Agent] Unknown strategy: %s", deploy.DeploymentStrategy)
+				logger.Info(fmt.Sprintf("[Agent] Unknown strategy: %s", deploy.DeploymentStrategy))
 			}
 
 			if procErr != nil {
-				log.Printf("[Agent] Job %s failed: %v", deploy.JobID, procErr)
+				logger.WithError(err).Error(fmt.Sprintf("[Agent] Job %s failed: %v", deploy.ID, deploy.DeploymentStrategy))
 				continue
 			}
 
 			if err := a.Stream.AckJob(a.StreamName, a.GroupName, msg.ID); err != nil {
-				log.Printf("[Agent] Ack failed: %v", err)
+				logger.Error(fmt.Sprintf("[Agent] Job %s ACK failed: %v", deploy.ID, err))
 			} else {
-				log.Printf("[Agent] Job %s ACK done", deploy.JobID)
+				logger.Info(fmt.Sprintf("[Agent] Job %s ACK done", deploy.ID))
 			}
 		}
 	}
 }
 
-func parseMessage(msg redis.XMessage, deploy *Deployment) error {
+func parseMessage(msg redis.XMessage) (*dto.Deployment, error) {
 	raw, ok := msg.Values["payload"].(string)
 	if !ok {
-		return fmt.Errorf("missing payload")
-	}
-	return json.Unmarshal([]byte(raw), deploy)
-}
-
-func (a *Agent) blueGreen(ctx context.Context, deploy Deployment) error {
-	const port = 8080
-
-	if err := a.DockerClient.CreateService(
-		deploy.ServiceName,
-		deploy.Version,
-		deploy.Image,
-		uint64(deploy.Replicas),
-		parseEnvString(deploy.Envs),
-		port,
-	); err != nil {
-		return fmt.Errorf("create slot: %w", err)
+		return nil, fmt.Errorf("missing payload")
 	}
 
-	if err := a.TraefikClient.EnsureRouter(
-		deploy.ServiceName,
-		fmt.Sprintf("Host(`%s.local`)", deploy.ServiceName),
-	); err != nil {
-		return fmt.Errorf("ensure router: %w", err)
+	var deploy dto.Deployment
+	if err := json.Unmarshal([]byte(raw), &deploy); err != nil {
+		return nil, err
 	}
 
-	ctxPing, cancel := context.WithTimeout(ctx, time.Duration(deploy.MaxWaitTime)*time.Second)
-	defer cancel()
-
-	slotName := fmt.Sprintf("%s-%s", deploy.ServiceName, deploy.Version)
-	if err := a.HealthChecker.Ping(ctxPing, slotName, port, deploy.HealthCheckInterval); err != nil {
-		logger.Info(fmt.Sprintf("[Agent] Rolling back slot %s", slotName))
-		_ = a.DockerClient.RemoveSlot(deploy.ServiceName, deploy.Version)
-		return fmt.Errorf("healthcheck failed: %w", err)
-	}
-
-	oldSlot, err := a.TraefikClient.GetCurrentSlot(deploy.ServiceName)
-	if err != nil {
-		return fmt.Errorf("get current slot: %w", err)
-	}
-	logger.Info(fmt.Sprintf("[Agent] Current slot is %s", oldSlot))
-
-	if err := a.TraefikClient.InsertWeightedService(deploy.ServiceName, []traefik.WeightedBackend{
-		{Name: deploy.ServiceName + "-" + oldSlot, Weight: 80},
-		{Name: slotName, Weight: 20},
-	}); err != nil {
-		return fmt.Errorf("insert weighted: %w", err)
-	}
-
-	oldWeight := 80
-	newWeight := 20
-	logger.Info(fmt.Sprintf("[Agent] Swap step: %d%% old, %d%% new", oldWeight, newWeight))
-	for oldWeight > 0 {
-		time.Sleep(time.Duration(deploy.SwapInterval) * time.Second)
-		oldWeight -= 20
-		if oldWeight < 0 {
-			oldWeight = 0
-		}
-		newWeight = 100 - oldWeight
-
-		if err := a.TraefikClient.InsertWeightedService(deploy.ServiceName, []traefik.WeightedBackend{
-			{Name: deploy.ServiceName + "-" + oldSlot, Weight: oldWeight},
-			{Name: slotName, Weight: newWeight},
-		}); err != nil {
-			return fmt.Errorf("swap step failed: %w", err)
-		}
-
-		logger.Info(fmt.Sprintf("[Agent] Swap step: %d%% old, %d%% new", oldWeight, newWeight))
-	}
-
-	if err := a.TraefikClient.InsertWeightedService(deploy.ServiceName, []traefik.WeightedBackend{
-		{Name: slotName, Weight: 100},
-	}); err != nil {
-		return fmt.Errorf("cleanup weighted: %w", err)
-	}
-
-	if err := a.DockerClient.RemoveSlot(deploy.ServiceName, oldSlot); err != nil {
-		logger.Warn(fmt.Sprintf("[Agent] Failed to remove old slot: %v", err))
-	}
-
-	if err := a.TraefikClient.PointRouterTo(deploy.ServiceName, deploy.Version); err != nil {
-		return fmt.Errorf("point router failed: %w", err)
-	}
-
-	logger.Info(fmt.Sprintf("[Agent] BlueGreen rollout finished for %s", deploy.ServiceName))
-	return nil
-}
-
-func parseEnvString(envs string) []string {
-	var out []string
-	_ = json.Unmarshal([]byte(envs), &out)
-	return out
+	return &deploy, nil
 }

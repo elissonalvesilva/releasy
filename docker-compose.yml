@@ -18,27 +18,39 @@ services:
       - "traefik.enable=false"
 
   control_plane:
-    image: control_plane:v11
+    image: control_plane:v23
     ports:
       - "3344:3344"
     environment:
       - RELEASY_REDIS_ADDR=redis:6379
+      - RELEASY_POSTGRES_DSN=postgres://postgres:postgres@postgres:2098/releasy?sslmode=disable
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
     networks:
       - releasy_network
     depends_on:
-      - redis
-      - traefik
+      redis:
+        condition: service_started
+      traefik:
+        condition: service_started
+      postgres:
+        condition: service_healthy
 
   agent:
-    image: agent:v22
+    image: agent:v30
     depends_on:
-      - redis
-      - traefik
+      redis:
+        condition: service_started
+      traefik:
+        condition: service_started
+      control_plane:
+        condition: service_started
+      postgres:
+        condition: service_healthy
     environment:
       - RELEASY_REDIS_ADDR=redis:6379
       - TRAEFIK_DYNAMIC_FILE=/etc/traefik/dynamic/dynamic.yml
+      - RELEASY_POSTGRES_DSN=postgres://postgres:postgres@postgres:2098/releasy?sslmode=disable
     networks:
       - releasy_network
     deploy:
@@ -59,6 +71,28 @@ services:
       - releasy_network
     labels:
       - "traefik.enable=false"
+
+  postgres:
+    image: postgres:15-alpine
+    container_name: releasy-postgres
+    restart: always
+    command: [ "postgres", "-c", "port=2098" ]
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: releasy
+      PGPORT: 2098
+    ports:
+      - "2098:2098"
+    networks:
+      - releasy_network
+    labels:
+      - "traefik.enable=false"
+    healthcheck:
+      test: [ "CMD", "pg_isready", "-U", "postgres", "-p", "2098" ]
+      interval: 5s
+      timeout: 5s
+      retries: 5
 
 networks:
   releasy_network:

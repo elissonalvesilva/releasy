@@ -14,7 +14,7 @@ func (api *API) deploymentHandler(c *gin.Context) {
 		return
 	}
 
-	jobID, err := api.DeploymentService.Execute(req)
+	jobID, err := api.DeploymentService.Execute(c, req)
 	if err != nil {
 		logger.WithError(err).Error("Error executing deployment")
 		c.JSON(500, gin.H{"error": "Failed to create job"})
@@ -24,5 +24,20 @@ func (api *API) deploymentHandler(c *gin.Context) {
 	c.JSON(201, gin.H{
 		"status": "deployment created",
 		"job_id": jobID,
+	})
+}
+
+func (api *API) finishDeploymentHandler(c *gin.Context) {
+	jobID := c.Param("job_id")
+
+	err := api.DeploymentService.Finish(c, jobID)
+	if err != nil {
+		logger.WithError(err).Error("Error executing deployment")
+		c.JSON(500, gin.H{"error": "Failed to create job"})
+		return
+	}
+
+	c.JSON(201, gin.H{
+		"status": "finishing deployment",
 	})
 }
