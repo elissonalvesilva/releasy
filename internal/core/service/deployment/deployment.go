@@ -1,6 +1,7 @@
 package deployment
 
 import (
+	"encoding/json"
 	"github.com/elissonalvesilva/releasy/internal/core/domain"
 	"github.com/elissonalvesilva/releasy/internal/store"
 	"time"
@@ -8,7 +9,7 @@ import (
 
 type (
 	DeploymentCommand struct {
-		DeploymentName      string   `json:"deployment_name"`
+		DeploymentStrategy  string   `json:"strategy"`
 		ServiceName         string   `json:"service_name"`
 		Replicas            int      `json:"replicas"`
 		Image               string   `json:"image"`
@@ -17,6 +18,7 @@ type (
 		Envs                []string `json:"envs,omitempty"`
 		MaxWaitTime         int      `json:"max_wait_time,omitempty"`
 		Version             string   `json:"version"`
+		Action              string   `json:"action,omitempty"`
 	}
 
 	Deployment interface {
@@ -35,8 +37,13 @@ func NewDeploymentService(streams store.Streams) *DeploymentService {
 }
 
 func (d *DeploymentService) Execute(command DeploymentCommand) (string, error) {
+	if command.Action == "" {
+		command.Action = domain.ActionDeployCreate
+	}
+
 	deployment, err := domain.NewDeployment(
-		command.DeploymentName,
+		command.DeploymentStrategy,
+		command.Action,
 		command.ServiceName,
 		command.Image,
 		command.Version,
@@ -51,8 +58,9 @@ func (d *DeploymentService) Execute(command DeploymentCommand) (string, error) {
 		return "", err
 	}
 
-	payload := map[string]interface{}{
-		"job_id":                deployment,
+	deploymentValue := map[string]interface{}{
+		"job_id":                deployment.JobID,
+		"strategy":              deployment.DeploymentStrategy,
 		"service_name":          deployment.ServiceName,
 		"version":               deployment.Version,
 		"image":                 deployment.Image,
@@ -64,7 +72,17 @@ func (d *DeploymentService) Execute(command DeploymentCommand) (string, error) {
 		"created_at":            time.Now().Format(time.RFC3339),
 	}
 
-	if err := d.StreamsStore.PublishJob(command.DeploymentName, payload); err != nil {
+	deploymentJSON, err := json.Marshal(deploymentValue)
+	if err != nil {
+		return "", err
+	}
+
+	payload := map[string]interface{}{
+		"payload":    string(deploymentJSON),
+		"created_at": time.Now().Format(time.RFC3339),
+	}
+
+	if err := d.StreamsStore.PublishJob("releasy_jobs", payload); err != nil {
 		return "", err
 	}
 

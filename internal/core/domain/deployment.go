@@ -18,11 +18,13 @@ type (
 		Envs                string
 		MaxWaitTime         int
 		Version             string
+		Action              string
 	}
 )
 
 var (
 	ErrDeploymentNameIsInvalid = errors.New("deployment name is invalid")
+	ErrActionIsInvalid         = errors.New("action is invalid")
 )
 
 const (
@@ -39,9 +41,25 @@ var allowed = map[string]bool{
 	StrategyAllIn:         true,
 }
 
-func NewDeployment(deploymentStrategy, serviceName, image, version string, replicas, swapInterval, healthCheckInterval, maxWaitTime int, envs []string) (*Deployment, error) {
+const (
+	ActionDeployCreate   = "create"
+	ActionDeployFinish   = "finish"
+	ActionDeployRollback = "rollback"
+)
+
+var allowedActions = map[string]bool{
+	ActionDeployCreate:   true,
+	ActionDeployFinish:   true,
+	ActionDeployRollback: true,
+}
+
+func NewDeployment(deploymentStrategy, action, serviceName, image, version string, replicas, swapInterval, healthCheckInterval, maxWaitTime int, envs []string) (*Deployment, error) {
 	if deploymentStrategy == "" || !isValidStrategy(deploymentStrategy) {
 		return nil, ErrDeploymentNameIsInvalid
+	}
+
+	if action == "" || !isValidAction(action) {
+		return nil, ErrActionIsInvalid
 	}
 
 	jobID := uuid.NewString()
@@ -67,6 +85,10 @@ func NewDeployment(deploymentStrategy, serviceName, image, version string, repli
 
 func isValidStrategy(strategy string) bool {
 	return allowed[strategy]
+}
+
+func isValidAction(action string) bool {
+	return allowedActions[action]
 }
 
 func buildEnvsPayload(envs []string) (string, error) {

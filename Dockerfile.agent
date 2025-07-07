@@ -1,0 +1,33 @@
+# ------------------------------------------
+# 🚀 Stage 1 — Build Go binary
+# ------------------------------------------
+FROM golang:1.23.10-alpine3.22 AS builder
+
+# Instala git e outras dependências básicas
+RUN apk add --no-cache git
+
+WORKDIR /app
+
+# Copia go.mod + go.sum e baixa deps
+COPY go.mod go.sum ./
+RUN go mod download
+
+# Copia tudo
+COPY . .
+
+# Compila o binário do AGENT
+RUN go build -o agent ./cmd/agent/agent.go
+
+# ------------------------------------------
+# 🚀 Stage 2 — Imagem final minimalista
+# ------------------------------------------
+FROM alpine:latest
+
+WORKDIR /app
+
+# Copia binário do builder
+COPY --from=builder /app/agent .
+
+
+# Comando de inicialização
+ENTRYPOINT ["./agent"]

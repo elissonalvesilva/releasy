@@ -1,22 +1,24 @@
 version: '3.8'
 
 services:
-#  traefik:
-#    image: traefik:v3.4
-#    container_name: traefik
-#    command:
-#      - --configFile=/etc/traefik/traefik.yml
-#    ports:
-#      - "80:80"
-#    volumes:
-#      - ./traefik/traefik.yml:/etc/traefik/traefik.yml:ro
-#      - ./traefik/dynamic.yml:/etc/traefik/dynamic/dynamic.yml:ro
-#      - /var/run/docker.sock:/var/run/docker.sock:ro
-#    networks:
-#      - releasy_network
+  traefik:
+    image: traefik:v3.4
+    command:
+      - --configFile=/etc/traefik/traefik.yml
+      - "--providers.file.directory=/etc/traefik/dynamic"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ./internal/config/traefik/traefik.yml:/etc/traefik/traefik.yml
+      - ./internal/config/traefik/dynamic.yml:/etc/traefik/dynamic.yml
+    networks:
+      - releasy_network
+    ports:
+      - "80:80"
+    labels:
+      - "traefik.enable=false"
 
   control_plane:
-    image: control_plane:v4
+    image: control_plane:v11
     ports:
       - "3344:3344"
     environment:
@@ -27,6 +29,25 @@ services:
       - releasy_network
     depends_on:
       - redis
+      - traefik
+
+  agent:
+    image: agent:v22
+    depends_on:
+      - redis
+      - traefik
+    environment:
+      - RELEASY_REDIS_ADDR=redis:6379
+      - TRAEFIK_DYNAMIC_FILE=/etc/traefik/dynamic/dynamic.yml
+    networks:
+      - releasy_network
+    deploy:
+      replicas: 1
+    labels:
+      - "traefik.enable=false"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ./internal/config/traefik/dynamic.yml:/etc/traefik/dynamic/dynamic.yml
 
   redis:
     image: redis:7-alpine
@@ -34,7 +55,10 @@ services:
     command: [ "redis-server", "--save", "", "--appendonly", "no" ]
     networks:
       - releasy_network
+    labels:
+      - "traefik.enable=false"
 
 networks:
   releasy_network:
+    name: releasy_network
     driver: bridge

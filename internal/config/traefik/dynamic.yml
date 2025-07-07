@@ -1,0 +1,11 @@
+http:
+    routers:
+        example-api:
+            rule: Host(`example-api.local`)
+            service: example-api-svc
+    services:
+        example-api-svc:
+            weighted:
+                services:
+                    - name: example-api-v2@docker
+                      weight: 100

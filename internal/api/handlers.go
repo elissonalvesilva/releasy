@@ -1,7 +1,7 @@
 package api
 
 import (
-	"github.com/elissonalvesilva/releasy/internal/service/deployment"
+	"github.com/elissonalvesilva/releasy/internal/core/service/deployment"
 	"github.com/elissonalvesilva/releasy/pkg/logger"
 	"github.com/gin-gonic/gin"
 )

@@ -2,7 +2,7 @@ package main
 
 import (
 	"github.com/elissonalvesilva/releasy/internal/api"
-	"github.com/elissonalvesilva/releasy/internal/service/deployment"
+	"github.com/elissonalvesilva/releasy/internal/core/service/deployment"
 	"github.com/elissonalvesilva/releasy/internal/store"
 	"github.com/elissonalvesilva/releasy/pkg/logger"
 	"os"
