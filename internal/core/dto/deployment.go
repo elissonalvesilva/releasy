@@ -5,6 +5,7 @@ import "time"
 type (
 	Deployment struct {
 		ID                  string    `json:"id"`
+		Application         string    `json:"application"`
 		DeploymentStrategy  string    `json:"strategy"`
 		ServiceName         string    `json:"service_name"`
 		Version             string    `json:"version"`

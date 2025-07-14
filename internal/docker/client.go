@@ -22,7 +22,7 @@ type (
 	}
 
 	DockerClient interface {
-		CreateService(serviceName, slot, image string, replicas uint64, envs []string, port int) error
+		CreateService(serviceName, slot, image string, replicas uint64, envs []string, port int, isInitial bool) error
 		ListServices() ([]string, error)
 		RemoveSlot(serviceName, slot string) error
 		Close() error
@@ -44,7 +44,7 @@ func (c *dockerClient) Close() error {
 	return c.cli.Close()
 }
 
-func (c *dockerClient) CreateService(serviceName, slot string, image string, replicas uint64, envs []string, port int) error {
+func (c *dockerClient) CreateService(serviceName, slot string, image string, replicas uint64, envs []string, port int, isInitial bool) error {
 	ctx := context.Background()
 
 	base := strings.ToLower(strings.TrimSpace(serviceName))
@@ -83,7 +83,12 @@ func (c *dockerClient) CreateService(serviceName, slot string, image string, rep
 
 		labels := map[string]string{
 			"traefik.enable": "true",
-			fmt.Sprintf("traefik.http.services.%s.loadbalancer.server.port", safeName): fmt.Sprintf("%d", port),
+			fmt.Sprintf("traefik.http.services.%s-svc.loadbalancer.server.port", base): fmt.Sprintf("%d", port),
+		}
+
+		if isInitial {
+			labels[fmt.Sprintf("traefik.http.routers.%s.rule", base)] = fmt.Sprintf("Host(`%s.local`)", base)
+			labels[fmt.Sprintf("traefik.http.routers.%s.service", base)] = fmt.Sprintf("%s-svc", base)
 		}
 
 		resp, err := c.cli.ContainerCreate(ctx,

@@ -1,0 +1,11 @@
+root = "."
+tmp_dir = "tmp"
+
+[build]
+  poll = true
+  cmd = "go build -o tmp/controlplane ./cmd/controlplane/main.go"
+  bin = "tmp/controlplane"
+  delay = 1000
+  exclude_dir = ["assets", "tmp", "vendor"]
+  include_ext = ["go", "tpl", "tmpl", "html", "yaml", "yml"]
+  exclude_regex = ["_test\\.go"]

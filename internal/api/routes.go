@@ -11,6 +11,8 @@ func (api *API) healthHandler(c *gin.Context) {
 
 func (api *API) registerRoutes() {
 	api.Router.GET("/ping", api.healthHandler)
+
+	api.Router.POST("/services", api.createServiceHandler)
 	api.Router.POST("/deployment", api.deploymentHandler)
 	api.Router.PUT("/deployment/finish/:job_id", api.finishDeploymentHandler)
 }

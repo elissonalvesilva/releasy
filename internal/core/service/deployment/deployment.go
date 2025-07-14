@@ -13,6 +13,7 @@ import (
 type (
 	DeploymentCommand struct {
 		DeploymentStrategy  string   `json:"strategy"`
+		Application         string   `json:"application"`
 		ServiceName         string   `json:"service_name"`
 		Replicas            int      `json:"replicas"`
 		Image               string   `json:"image"`
@@ -50,6 +51,7 @@ func (d *DeploymentService) Execute(ctx context.Context, command DeploymentComma
 	deployment, err := domain.NewDeployment(
 		command.DeploymentStrategy,
 		command.Action,
+		command.Application,
 		command.ServiceName,
 		command.Image,
 		command.Version,

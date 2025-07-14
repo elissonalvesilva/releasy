@@ -18,7 +18,9 @@ services:
       - "traefik.enable=false"
 
   control_plane:
-    image: control_plane:v23
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
     ports:
       - "3344:3344"
     environment:
@@ -26,6 +28,7 @@ services:
       - RELEASY_POSTGRES_DSN=postgres://postgres:postgres@postgres:2098/releasy?sslmode=disable
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
+      - .:/app
     networks:
       - releasy_network
     depends_on:
@@ -35,9 +38,12 @@ services:
         condition: service_started
       postgres:
         condition: service_healthy
+    command: [ "sh", "-c", "go mod tidy && go install github.com/air-verse/air@v1.61.0 && air" ]
 
   agent:
-    image: agent:v31
+    build:
+      context: .
+      dockerfile: Dockerfile.agent.dev
     depends_on:
       redis:
         condition: service_started
@@ -58,9 +64,11 @@ services:
     labels:
       - "traefik.enable=false"
     volumes:
+      - .:/app
       - /var/run/docker.sock:/var/run/docker.sock
       - ./internal/config/traefik/dynamic.yml:/etc/traefik/dynamic/dynamic.yml
       - ~/.docker/config.json:/root/.docker/config.json:ro
+    command: [ "sh", "-c", "go mod tidy && go install github.com/air-verse/air@v1.61.0 && air -c .air.agent.toml" ]
 
   redis:
     image: redis:7-alpine

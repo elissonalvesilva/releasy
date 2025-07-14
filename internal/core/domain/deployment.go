@@ -11,6 +11,7 @@ type (
 	Deployment struct {
 		ID                  string
 		DeploymentStrategy  string
+		Application         string
 		ServiceName         string
 		Replicas            int
 		Image               string
@@ -35,6 +36,7 @@ const (
 	StrategyRollingUpdate = "rolling_update"
 	StrategyCanary        = "canary"
 	StrategyAllIn         = "all_in"
+	StrategyInitialize    = "initialize"
 )
 
 var allowed = map[string]bool{
@@ -42,6 +44,7 @@ var allowed = map[string]bool{
 	StrategyRollingUpdate: true,
 	StrategyCanary:        true,
 	StrategyAllIn:         true,
+	StrategyInitialize:    true,
 }
 
 const (
@@ -70,10 +73,12 @@ const (
 )
 
 const (
-	DefaultServicePort = 8080
+	DefaultServicePort                = 8080
+	DefaultHealthCheckIntervalSeconds = 30
+	DefaultMaxWaitTimeSeconds         = 600
 )
 
-func NewDeployment(deploymentStrategy, action, serviceName, image, version string, replicas, swapInterval, healthCheckInterval, maxWaitTime int, envs []string) (*Deployment, error) {
+func NewDeployment(deploymentStrategy, action, application, serviceName, image, version string, replicas, swapInterval, healthCheckInterval, maxWaitTime int, envs []string) (*Deployment, error) {
 	if deploymentStrategy == "" || !isValidStrategy(deploymentStrategy) {
 		return nil, ErrDeploymentNameIsInvalid
 	}
@@ -92,6 +97,7 @@ func NewDeployment(deploymentStrategy, action, serviceName, image, version strin
 	return &Deployment{
 		ID:                  jobID,
 		DeploymentStrategy:  deploymentStrategy,
+		Application:         application,
 		ServiceName:         serviceName,
 		Replicas:            replicas,
 		Image:               image,

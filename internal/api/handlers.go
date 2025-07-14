@@ -1,7 +1,10 @@
 package api
 
 import (
+	"errors"
 	"github.com/elissonalvesilva/releasy/internal/core/service/deployment"
+	"github.com/elissonalvesilva/releasy/internal/core/service/service"
+	"github.com/elissonalvesilva/releasy/internal/store"
 	"github.com/elissonalvesilva/releasy/pkg/logger"
 	"github.com/gin-gonic/gin"
 )
@@ -87,20 +90,26 @@ func (api *API) finishDeploymentHandler(c *gin.Context) {
 
 // service handlers
 
-// func (api *API) createServiceHandler(c *gin.Context) {
-// 	var req deployment.ServiceCommand
+func (api *API) createServiceHandler(c *gin.Context) {
+	var req service.CreateServiceCommand
 
-// 	if err := c.ShouldBindJSON(&req); err != nil {
-// 		c.JSON(400, gin.H{"error": "Invalid JSON"})
-// 		return
-// 	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(400, gin.H{"error": "Invalid JSON"})
+		return
+	}
 
-// 	err := api.DeploymentService.CreateService(c, req)
-// 	if err != nil {
-// 		logger.WithError(err).Error("Error creating service")
-// 		c.JSON(500, gin.H{"error": "Failed to create service"})
-// 		return
-// 	}
+	err := api.ServiceService.Create(c, req)
+	if err != nil {
+		if errors.Is(err, store.ErrServiceAlreadyExists) {
+			c.JSON(409, gin.H{"error": "Service already exists"})
+			return
+		}
+
+		logger.WithError(err).Error("Error creating service")
+		c.JSON(500, gin.H{"error": "Failed to create service"})
+		return
+	}
+}
 
 // 	c.JSON(201, gin.H{
 // 		"status": "service created",

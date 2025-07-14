@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/elissonalvesilva/releasy/internal/core/domain"
+	"github.com/elissonalvesilva/releasy/internal/jobs/initial"
 	"time"
 
 	"github.com/elissonalvesilva/releasy/internal/core/dto"
@@ -28,6 +29,7 @@ type Agent struct {
 	db            store.DbStore
 
 	blueGreenJob *bluegreen.Handler
+	initialJob   *initial.Handler
 }
 
 func NewAgent(
@@ -49,6 +51,7 @@ func NewAgent(
 		db:            db,
 
 		blueGreenJob: bluegreen.New(dockerClient, traefikClient, healthChecker, db),
+		initialJob:   initial.NewAgent(dockerClient, traefikClient, healthChecker, db),
 	}
 }
 
@@ -81,6 +84,8 @@ func (a *Agent) Start() {
 			switch deploy.DeploymentStrategy {
 			case domain.StrategyBlueGreen:
 				procErr = a.blueGreenJob.Run(ctx, deploy)
+			case domain.StrategyInitialize:
+				procErr = a.initialJob.Run(ctx, deploy)
 			default:
 				logger.Info(fmt.Sprintf("[Agent] Unknown strategy: %s", deploy.DeploymentStrategy))
 			}

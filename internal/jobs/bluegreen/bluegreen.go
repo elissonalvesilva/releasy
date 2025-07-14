@@ -67,6 +67,7 @@ func (h *Handler) executeCreateBlueGreen(ctx context.Context, deploy *dto.Deploy
 		uint64(deploy.Replicas),
 		parseEnvString(deploy.Envs),
 		port,
+		false,
 	); err != nil {
 		return fmt.Errorf("create slot: %w", err)
 	}

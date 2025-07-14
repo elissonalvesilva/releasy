@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"github.com/elissonalvesilva/releasy/internal/api"
 	"github.com/elissonalvesilva/releasy/internal/core/service/deployment"
+	"github.com/elissonalvesilva/releasy/internal/core/service/service"
 	"github.com/elissonalvesilva/releasy/internal/store"
 	"github.com/elissonalvesilva/releasy/pkg/logger"
 	"log"
@@ -28,7 +29,8 @@ func main() {
 	streamsStore := store.NewStreamsStore(redisAddr)
 
 	deploymentService := deployment.NewDeploymentService(streamsStore, pg)
-	server := api.NewAPI(streamsStore, deploymentService)
+	servicesService := service.NewService(streamsStore, pg)
+	server := api.NewAPI(streamsStore, deploymentService, servicesService)
 
 	if err := server.Run(port); err != nil {
 		logger.WithError(err).Fatal("API server crashed")
