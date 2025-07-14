@@ -19,6 +19,10 @@ func (api *API) deploymentHandler(c *gin.Context) {
 
 	jobID, err := api.DeploymentService.Execute(c, req)
 	if err != nil {
+		if errors.Is(err, store.ErrNotFound) {
+			c.JSON(404, gin.H{"error": "Service not found"})
+			return
+		}
 		logger.WithError(err).Error("Error executing deployment")
 		c.JSON(500, gin.H{"error": "Failed to create job"})
 		return
@@ -35,6 +39,10 @@ func (api *API) finishDeploymentHandler(c *gin.Context) {
 
 	err := api.DeploymentService.Finish(c, jobID)
 	if err != nil {
+		if errors.Is(err, store.ErrNotFound) {
+			c.JSON(404, gin.H{"error": "Service not found"})
+			return
+		}
 		logger.WithError(err).Error("Error executing deployment")
 		c.JSON(500, gin.H{"error": "Failed to create job"})
 		return
@@ -109,6 +117,10 @@ func (api *API) createServiceHandler(c *gin.Context) {
 		c.JSON(500, gin.H{"error": "Failed to create service"})
 		return
 	}
+
+	c.JSON(201, gin.H{
+		"status": "service created",
+	})
 }
 
 // 	c.JSON(201, gin.H{

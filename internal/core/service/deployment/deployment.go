@@ -44,6 +44,10 @@ func NewDeploymentService(streams store.Streams, db store.DbStore) *DeploymentSe
 }
 
 func (d *DeploymentService) Execute(ctx context.Context, command DeploymentCommand) (string, error) {
+	if _, err := d.getService(ctx, command.Application, command.ServiceName); err != nil {
+		return "", err
+	}
+
 	if command.Action == "" {
 		command.Action = domain.ActionDeployCreate
 	}
@@ -163,4 +167,8 @@ func (d *DeploymentService) toDeploymentStreamData(deployment domain.Deployment)
 	}
 
 	return deploymentJSON, nil
+}
+
+func (d *DeploymentService) getService(ctx context.Context, application, serviceName string) (*dto.Service, error) {
+	return d.db.GetService(ctx, application, serviceName)
 }

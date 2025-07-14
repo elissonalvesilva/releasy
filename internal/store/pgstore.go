@@ -2,6 +2,7 @@ package store
 
 import (
 	"context"
+	"database/sql"
 	"embed"
 	"errors"
 	"github.com/lib/pq"
@@ -76,6 +77,7 @@ type Event struct {
 
 var (
 	ErrServiceAlreadyExists = errors.New("service already exists")
+	ErrNotFound             = errors.New("not found result")
 )
 
 func NewPgStore(dsn string) (*PgStore, error) {
@@ -149,6 +151,9 @@ func (s *PgStore) GetDeploymentByID(ctx context.Context, id string) (*Deployment
 	query := `SELECT * FROM deployments WHERE id = $1`
 	err := s.DB.GetContext(ctx, &d, query, id)
 	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, ErrNotFound
+		}
 		return nil, err
 	}
 	return &d, nil
@@ -181,28 +186,27 @@ func (s *PgStore) GetServices(ctx context.Context, serviceName string) ([]dto.Se
 	var servicesDTO []dto.Service
 	query := `SELECT * FROM services WHERE name = $1 ORDER BY created_at DESC`
 	err := s.DB.SelectContext(ctx, &services, query, serviceName)
-
-	for _, service := range services {
-		servicesDTO = append(servicesDTO, s.toServiceDTO(service))
-	}
-	return servicesDTO, err
-}
-
-func (s *PgStore) GetService(ctx context.Context, application, serviceName string) (*dto.Service, error) {
-	var svc Service
-
-	query := `SELECT * FROM services WHERE name = $1 AND application = $2`
-	err := s.DB.GetContext(ctx, &svc, query, serviceName, application)
 	if err != nil {
 		return nil, err
 	}
 
-	if svc.ID == "" {
-		return nil, nil
+	for _, service := range services {
+		servicesDTO = append(servicesDTO, s.toServiceDTO(service))
 	}
+	return servicesDTO, nil
+}
 
+func (s *PgStore) GetService(ctx context.Context, application, serviceName string) (*dto.Service, error) {
+	var svc Service
+	query := `SELECT * FROM services WHERE name = $1 AND application = $2`
+	err := s.DB.GetContext(ctx, &svc, query, serviceName, application)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, ErrNotFound
+		}
+		return nil, err
+	}
 	service := s.toServiceDTO(svc)
-
 	return &service, nil
 }
 
@@ -211,13 +215,11 @@ func (s *PgStore) GetServiceByName(ctx context.Context, serviceName string) (*dt
 	query := `SELECT * FROM services WHERE name = $1 ORDER BY created_at DESC LIMIT 1`
 	err := s.DB.GetContext(ctx, &svc, query, serviceName)
 	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, ErrNotFound
+		}
 		return nil, err
 	}
-
-	if svc.ID == "" {
-		return nil, nil
-	}
-
 	service := s.toServiceDTO(svc)
 	return &service, nil
 }
@@ -246,7 +248,11 @@ func (s *PgStore) GetEvents(ctx context.Context, serviceName string, limit int) 
 	var events []Event
 	query := `SELECT * FROM events WHERE service_name = $1 ORDER BY created_at DESC LIMIT $2`
 	err := s.DB.SelectContext(ctx, &events, query, serviceName, limit)
-	return events, err
+	if err != nil {
+		return nil, err
+	}
+
+	return events, nil
 }
 
 func (s *PgStore) toModel(d dto.Deployment) Deployment {
