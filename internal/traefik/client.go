@@ -58,6 +58,8 @@ type (
 		EnsureRouter(serviceName, rule string) error
 		InsertWeightedService(serviceName string, backends []WeightedBackend) error
 		GetCurrentSlot(serviceName string) (string, error)
+		GetCandidateSlot(serviceName string) (string, error)
+		GetNoWeightSlot(serviceName string) (string, error)
 		PointRouterTo(serviceName, slot string) error
 	}
 )
@@ -192,6 +194,84 @@ func (c *Client) GetCurrentSlot(serviceName string) (string, error) {
 	}
 
 	return "", fmt.Errorf("unknown slot")
+}
+
+func (c *Client) GetCandidateSlot(serviceName string) (string, error) {
+	cfg, err := c.load()
+	if err != nil {
+		return "", err
+	}
+
+	r, ok := cfg.HTTP.Routers[serviceName]
+	if !ok {
+		return "", fmt.Errorf("router %s not found", serviceName)
+	}
+
+	if !strings.HasSuffix(r.Service, "-svc") {
+		if strings.HasSuffix(r.Service, "-v1") {
+			return "v2", nil
+		}
+		if strings.HasSuffix(r.Service, "-v2") {
+			return "v1", nil
+		}
+		return "v1", nil
+	}
+
+	split, ok := cfg.HTTP.Services[r.Service]
+	if !ok || split.Weighted == nil || len(split.Weighted.Services) == 0 {
+		return "", fmt.Errorf("no split config for %s", serviceName)
+	}
+
+	var maxWeight WeightedService
+	for _, s := range split.Weighted.Services {
+		if s.Weight > maxWeight.Weight {
+			maxWeight = s
+		}
+	}
+
+	name := strings.Split(maxWeight.Name, "@")[0]
+
+	if strings.HasSuffix(name, "-v1") {
+		return "v2", nil
+	}
+	if strings.HasSuffix(name, "-v2") {
+		return "v1", nil
+	}
+
+	return "", fmt.Errorf("unknown slot")
+}
+
+func (c *Client) GetNoWeightSlot(serviceName string) (string, error) {
+	cfg, err := c.load()
+	if err != nil {
+		return "", err
+	}
+
+	r, ok := cfg.HTTP.Routers[serviceName]
+	if !ok {
+		return "", fmt.Errorf("router %s not found", serviceName)
+	}
+
+	svc, ok := cfg.HTTP.Services[r.Service]
+	if !ok || svc.Weighted == nil || len(svc.Weighted.Services) == 0 {
+		return "", fmt.Errorf("no weighted config for service %s", r.Service)
+	}
+
+	for _, s := range svc.Weighted.Services {
+		if s.Weight == 0 {
+			fullName := strings.SplitN(s.Name, "@", 2)[0]
+
+			appPrefix := strings.TrimSuffix(r.Service, "-svc") + "-"
+			if !strings.HasPrefix(fullName, appPrefix) {
+				return "", fmt.Errorf("unexpected service name format: %s", fullName)
+			}
+
+			slot := strings.TrimPrefix(fullName, appPrefix)
+			return slot, nil
+		}
+	}
+
+	return "", fmt.Errorf("no slot with weight zero found for %s", serviceName)
 }
 
 func (c *Client) PointRouterTo(serviceName, slot string) error {

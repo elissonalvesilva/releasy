@@ -138,12 +138,18 @@ func (h *Handler) executeCreateBlueGreen(ctx context.Context, deploy *dto.Deploy
 }
 
 func (h *Handler) executeFinishBlueGreen(ctx context.Context, deploy *dto.Deployment) error {
+	service, err := h.db.GetServiceByName(ctx, deploy.ServiceName)
+	if err != nil {
+		logger.WithError(err).Error("error on get service by name")
+		return fmt.Errorf("error get service by name: %w", err)
+	}
+
 	if err := h.updateDeploymentStep(ctx, deploy, domain.StepFinishing); err != nil {
 		logger.WithError(err).Error("update deployment step")
 		return fmt.Errorf("update deployment step: %w", err)
 	}
 
-	oldSlot, err := h.TraefikClient.GetCurrentSlot(deploy.ServiceName)
+	oldSlot, err := h.TraefikClient.GetNoWeightSlot(deploy.ServiceName)
 	if err != nil {
 		logger.WithError(err).Error("get current slot")
 		return fmt.Errorf("get current slot: %w", err)
@@ -164,6 +170,14 @@ func (h *Handler) executeFinishBlueGreen(ctx context.Context, deploy *dto.Deploy
 	if err := h.TraefikClient.PointRouterTo(deploy.ServiceName, deploy.Version); err != nil {
 		logger.Warn(fmt.Sprintf("[BlueGreen] Failed to point router: %v", err))
 		return fmt.Errorf("point router failed: %w", err)
+	}
+
+	service.Version = deploy.Version
+	service.Image = deploy.Image
+
+	if err := h.db.UpdateService(ctx, *service); err != nil {
+		logger.WithError(err).Error("error on update service")
+		return fmt.Errorf("error update service: %w", err)
 	}
 
 	if err := h.updateDeploymentStep(ctx, deploy, domain.StepFinished); err != nil {

@@ -44,7 +44,8 @@ func NewDeploymentService(streams store.Streams, db store.DbStore) *DeploymentSe
 }
 
 func (d *DeploymentService) Execute(ctx context.Context, command DeploymentCommand) (string, error) {
-	if _, err := d.getService(ctx, command.Application, command.ServiceName); err != nil {
+	service, err := d.getService(ctx, command.Application, command.ServiceName)
+	if err != nil {
 		return "", err
 	}
 
@@ -59,7 +60,7 @@ func (d *DeploymentService) Execute(ctx context.Context, command DeploymentComma
 		command.ServiceName,
 		command.Image,
 		command.Version,
-		command.Replicas,
+		service.Replicas,
 		command.SwapInterval,
 		command.HealthCheckInterval,
 		command.MaxWaitTime,
@@ -97,7 +98,6 @@ func (d *DeploymentService) Finish(ctx context.Context, jobId string) error {
 	if err != nil {
 		return err
 	}
-	// TODO: validate if deployment is effective
 
 	if deployment.Step != domain.StepEffective {
 		return fmt.Errorf("deployment is not effective")
@@ -109,6 +109,7 @@ func (d *DeploymentService) Finish(ctx context.Context, jobId string) error {
 		"id":           deployment.ID,
 		"service_name": deployment.ServiceName,
 		"strategy":     deployment.Strategy,
+		"image":        deployment.Image,
 		"action":       deployment.Action,
 		"version":      deployment.Version,
 		"created_at":   time.Now().Format(time.RFC3339),
@@ -131,6 +132,7 @@ func (d *DeploymentService) Finish(ctx context.Context, jobId string) error {
 func (d *DeploymentService) toDTODeployment(deployment domain.Deployment) dto.Deployment {
 	return dto.Deployment{
 		ID:                 deployment.ID,
+		Application:        deployment.Application,
 		DeploymentStrategy: deployment.DeploymentStrategy,
 		ServiceName:        deployment.ServiceName,
 		Version:            deployment.Version,
@@ -148,6 +150,7 @@ func (d *DeploymentService) toDTODeployment(deployment domain.Deployment) dto.De
 func (d *DeploymentService) toDeploymentStreamData(deployment domain.Deployment) ([]byte, error) {
 	deploymentValue := map[string]interface{}{
 		"id":                    deployment.ID,
+		"application":           deployment.Application,
 		"strategy":              deployment.DeploymentStrategy,
 		"service_name":          deployment.ServiceName,
 		"version":               deployment.Version,

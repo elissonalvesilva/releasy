@@ -104,7 +104,7 @@ func (s *PgStore) SaveDeployment(ctx context.Context, d dto.Deployment) error {
 			id, application, service_name, strategy, version,
 			replicas, image, action, step, envs, created_at
 		) VALUES (
-			:id, application, :service_name, :strategy, :version,
+			:id, :application, :service_name, :strategy, :version,
 			:replicas, :image, :action, :step, :envs, :created_at
 		)
 	`
@@ -231,7 +231,7 @@ func (s *PgStore) DeleteService(ctx context.Context, application, serviceName st
 }
 
 func (s *PgStore) UpdateService(ctx context.Context, svc dto.Service) error {
-	query := `UPDATE services SET image = $1, replicas = $2, envs = $3, weight = $4, hostname = $5, created_at = $6, version = $7 WHERE name = $9 AND application = $10`
+	query := `UPDATE services SET image = $1, replicas = $2, envs = $3, weight = $4, hostname = $5, created_at = $6, version = $7 WHERE name = $8 AND application = $9`
 	_, err := s.DB.ExecContext(ctx, query, svc.Image, svc.Replicas, svc.Envs, svc.Weight, svc.Hostname, svc.CreatedAt, svc.Version, svc.Name, svc.Application)
 	return err
 }

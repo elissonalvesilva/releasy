@@ -83,12 +83,12 @@ func (c *dockerClient) CreateService(serviceName, slot string, image string, rep
 
 		labels := map[string]string{
 			"traefik.enable": "true",
-			fmt.Sprintf("traefik.http.services.%s-svc.loadbalancer.server.port", base): fmt.Sprintf("%d", port),
+			fmt.Sprintf("traefik.http.services.%s.loadbalancer.server.port", targetName): fmt.Sprintf("%d", port),
 		}
 
 		if isInitial {
 			labels[fmt.Sprintf("traefik.http.routers.%s.rule", base)] = fmt.Sprintf("Host(`%s.local`)", base)
-			labels[fmt.Sprintf("traefik.http.routers.%s.service", base)] = fmt.Sprintf("%s-svc", base)
+			//labels[fmt.Sprintf("traefik.http.routers.%s.service", base)] = fmt.Sprintf("%s-svc", base)
 		}
 
 		resp, err := c.cli.ContainerCreate(ctx,

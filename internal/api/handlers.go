@@ -19,11 +19,12 @@ func (api *API) deploymentHandler(c *gin.Context) {
 
 	jobID, err := api.DeploymentService.Execute(c, req)
 	if err != nil {
+		logger.WithError(err).Error("Error executing deployment")
 		if errors.Is(err, store.ErrNotFound) {
 			c.JSON(404, gin.H{"error": "Service not found"})
 			return
 		}
-		logger.WithError(err).Error("Error executing deployment")
+
 		c.JSON(500, gin.H{"error": "Failed to create job"})
 		return
 	}

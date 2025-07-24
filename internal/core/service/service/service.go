@@ -66,6 +66,29 @@ func (s *ServiceService) Create(ctx context.Context, command CreateServiceComman
 		return err
 	}
 
+	deployment, err := domain.NewDeployment(
+		domain.StrategyInitialize,
+		domain.ActionDeployCreate,
+		command.Application,
+		command.ServiceName,
+		command.Image,
+		command.Version,
+		command.Replicas,
+		0,
+		0,
+		command.MaxWaitTime,
+		command.Envs,
+	)
+
+	if err != nil {
+		return err
+	}
+
+	dtoDeployment := s.toDTODeployment(*deployment)
+	if err = s.db.SaveDeployment(ctx, dtoDeployment); err != nil {
+		return err
+	}
+
 	payload := s.toCreateServiceStreamData(command)
 
 	err = s.StreamsStore.PublishJob("releasy_jobs", payload)
@@ -125,6 +148,24 @@ func (s *ServiceService) toEnvString(envs []string) string {
 		envString += env + ","
 	}
 	return envString
+}
+
+func (d *ServiceService) toDTODeployment(deployment domain.Deployment) dto.Deployment {
+	return dto.Deployment{
+		ID:                 deployment.ID,
+		Application:        deployment.Application,
+		DeploymentStrategy: deployment.DeploymentStrategy,
+		ServiceName:        deployment.ServiceName,
+		Version:            deployment.Version,
+		Image:              deployment.Image,
+		Replicas:           deployment.Replicas,
+		SwapInterval:       deployment.SwapInterval,
+		Envs:               deployment.Envs,
+		MaxWaitTime:        deployment.MaxWaitTime,
+		Action:             deployment.Action,
+		Step:               deployment.Step,
+		CreatedAt:          deployment.CreatedAt,
+	}
 }
 
 func buildEnvsPayload(envs []string) (string, error) {
